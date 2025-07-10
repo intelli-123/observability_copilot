@@ -9,6 +9,9 @@
 
 # Production build files
 /build
+*.py
+/*.py
+/all_files_output.txt
 
 # Static site generator files
 .vercel
@@ -45,6 +48,8 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+*.py
+*.txt
 
 # OS-generated files
 .DS_Store
