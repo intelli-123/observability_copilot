@@ -50,7 +50,7 @@ lerna-debug.log*
 *.sw?
 *.py
 *.txt
-
+.vscode
 # OS-generated files
 .DS_Store
 .DS_Store?
