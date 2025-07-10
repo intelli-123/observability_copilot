@@ -3,10 +3,10 @@
 
 import { useEffect, useState } from 'react';
 import GeminiChatWidget from '@/components/GeminiChatWidget';
-import LogPageTemplate from '@/components/LogPageTemplate'; // Import the template
+import LogPageTemplate from '@/components/LogPageTemplate';
 
-// Define a type for the log group data structure
 type LogGroupData = {
+  region: string;
   logGroupName: string;
   logs: string;
 };
@@ -40,33 +40,37 @@ export default function AwsLogsPage() {
   }, []);
 
   const combinedLogsForGemini = logGroups
-    .map(lg => `--- Logs for ${lg.logGroupName} ---\n${lg.logs}`)
+    .map(lg => `--- Logs for ${lg.logGroupName} (Region: ${lg.region}) ---\n${lg.logs}`)
     .join('\n\n');
 
   return (
-    // 👇 Make sure you are passing all the required props here
     <LogPageTemplate
       title="AWS CloudWatch Logs"
       iconSrc="/logos/cloudwatch.png"
       iconAlt="AWS CloudWatch Logo"
     >
-      {/* The content below is passed as 'children' to the template */}
       <div className="space-y-6">
         {loading && <p className="text-center py-10 text-gray-400">Loading AWS logs…</p>}
         {error && <p className="text-center py-10 text-red-400">Error: {error}</p>}
         
         {!loading && !error && logGroups.map((group) => (
-          <section key={group.logGroupName} className="rounded-md border border-gray-700 bg-gray-800 shadow-sm">
+          <section key={`${group.region}-${group.logGroupName}`} className="rounded-md border border-gray-700 bg-gray-800 shadow-sm">
             <header className="p-3 text-lg font-semibold text-amber-400 border-b border-gray-700 break-all">
+              <span className="text-gray-400 text-sm block">Region: {group.region}</span>
               Log Group: {group.logGroupName}
             </header>
+            
             <div className="p-3">
-              <pre className="text-xs whitespace-pre-wrap overflow-x-auto max-h-[60vh] bg-gray-950 p-3 rounded-md">
+              <pre className="text-xs whitespace-pre-wrap overflow-x-auto max-h-[60vh] bg-gray-950 p-3 rounded-md text-gray-300">
                 {group.logs}
               </pre>
             </div>
           </section>
         ))}
+
+        {!loading && !error && logGroups.length === 0 && (
+            <p className="text-center py-10 text-gray-400">No logs found for the configured groups.</p>
+        )}
       </div>
 
       <GeminiChatWidget logs={combinedLogsForGemini} />

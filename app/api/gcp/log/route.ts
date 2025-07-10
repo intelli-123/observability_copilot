@@ -1,72 +1,73 @@
 // file: app/api/gcp/log/route.ts
 
+// file: app/api/gcp/log/route.ts
+
 import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
 import { Logging } from '@google-cloud/logging';
 import logger from '@/utils/logger';
-import { gcpProjectsConfig } from '@/config/gcp';
+
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
 
 export async function GET() {
-  if (gcpProjectsConfig.length === 0) {
-    logger.warn('GCP log endpoint called, but no projects are configured.');
-    return NextResponse.json({ error: 'No GCP projects are configured.' }, { status: 500 });
-  }
-
-  logger.info({ projects: gcpProjectsConfig.map(p => p.projectId) }, 'Fetching logs for configured GCP projects.');
-
   try {
-    const promises = gcpProjectsConfig.map(async (config) => {
-      const logging = new Logging({
-        projectId: config.projectId,
-        keyFilename: config.keyFilename,
-      });
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    if (!settingsString) throw new Error('GCP settings not found.');
 
-      // 👇 This is the new, more reliable filter
-      const filter = `
-        timestamp>="${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}"
-        AND
-        logName !~ "cloudaudit.googleapis.com"
-      `;
+    const settings: any = JSON.parse(settingsString);
+    const gcpKeys = settings.configs?.gcp?.GCP_PROJECT_KEYS_JSON;
 
-      const [entries] = await logging.getEntries({
-        filter,
-        pageSize: 1000,
-        orderBy: 'timestamp desc',
-      });
+    if (!gcpKeys || !Array.isArray(gcpKeys) || gcpKeys.length === 0) {
+      throw new Error('GCP project keys are not configured in settings.');
+    }
 
-      logger.info({ project: config.projectId, count: entries.length }, "Found log entries for project.");
+    const promises = gcpKeys.map(async (keyJson: string) => {
+      try {
+        const credentials = JSON.parse(keyJson);
+        const projectId = credentials.project_id;
 
-      const logs = entries.map(entry => {
-        const metadata = entry.metadata;
-        let timestamp = 'NO_TIMESTAMP';
-        try {
-          if (metadata?.timestamp) {
-            timestamp = new Date(metadata.timestamp as any).toISOString();
-          }
-        } catch (e) {
-          logger.warn({ timestamp: metadata?.timestamp }, "Could not parse invalid timestamp");
-        }
-        const severity = metadata?.severity ?? 'DEFAULT';
-        let message = '[no message content]';
-        if (entry.data) {
-          message = typeof entry.data === 'object' ? JSON.stringify(entry.data, null, 2) : String(entry.data);
-        }
-        return `${timestamp} | ${severity} | ${message.trim()}`;
-      }).join('\n');
+        const logging = new Logging({ projectId, credentials });
 
-      return {
-        projectId: config.projectId,
-        logs: logs || 'No recent logs found.',
-      };
+        const filter = `timestamp>="${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" AND logName !~ "cloudaudit.googleapis.com"`;
+        
+        const [entries] = await logging.getEntries({ filter, pageSize: 50, orderBy: 'timestamp desc' });
+        
+        logger.info({ project: projectId, count: entries.length }, "Found log entries for project.");
+
+        const logs = entries.map(entry => {
+          const metadata = entry.metadata;
+          let timestamp = new Date(metadata.timestamp as any).toISOString();
+          const severity = metadata.severity ?? 'DEFAULT';
+          let message = typeof entry.data === 'object' ? JSON.stringify(entry.data, null, 2) : String(entry.data);
+          return `${timestamp} | ${severity} | ${message.trim()}`;
+        }).join('\n');
+
+        return { projectId, logs: logs || 'No recent logs found.' };
+      } catch (err: any) {
+        logger.error({ err, partialKey: keyJson.slice(0, 50) }, `Failed to process a GCP key.`);
+        return { projectId: `Error processing a key`, logs: err.message };
+      }
     });
 
     const results = await Promise.all(promises);
     return NextResponse.json({ projectLogs: results });
 
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to fetch logs from GCP Cloud Logging.');
-    return NextResponse.json(
-      { error: 'Failed to fetch logs from GCP. Check server logs for details.' },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in GCP log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

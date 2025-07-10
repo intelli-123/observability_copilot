@@ -1,0 +1,339 @@
+// file: app/api/cloudwatch/log/route.ts
+
+import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import logger from '@/utils/logger';
+
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
+
+export async function GET() {
+  try {
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    if (!settingsString) throw new Error('CloudWatch settings not found.');
+
+    const settings: any = JSON.parse(settingsString);
+    const awsConfig = settings.configs?.cloudwatch;
+
+    if (!awsConfig?.AWS_ACCESS_KEY_ID || !awsConfig?.AWS_SECRET_ACCESS_KEY || !awsConfig?.AWS_REGIONS_LOG_GROUPS) {
+      throw new Error('AWS credentials or region/log group config is missing in settings.');
+    }
+    
+    const regionConfigs = JSON.parse(awsConfig.AWS_REGIONS_LOG_GROUPS);
+
+    // This will hold promises for fetching logs from all groups across all regions
+    const allLogPromises: Promise<any>[] = [];
+
+    for (const config of regionConfigs) {
+      const { region, logGroups } = config;
+      if (!region || !logGroups || logGroups.length === 0) continue;
+
+      const client = new CloudWatchLogsClient({
+        region: region,
+        credentials: {
+          accessKeyId: awsConfig.AWS_ACCESS_KEY_ID,
+          secretAccessKey: awsConfig.AWS_SECRET_ACCESS_KEY,
+        },
+      });
+
+      for (const logGroupName of logGroups) {
+        const command = new FilterLogEventsCommand({
+          logGroupName: logGroupName,
+          limit: 50,
+        });
+        
+        const promise = client.send(command).then(response => ({
+          region,
+          logGroupName,
+          logs: response.events?.map(event => event.message).join('\n') || 'No recent logs found.',
+        })).catch(err => {
+            logger.error({err, region, logGroupName}, "Failed to fetch logs for a specific group");
+            return { region, logGroupName, logs: `Error fetching logs: ${err.message}` };
+        });
+
+        allLogPromises.push(promise);
+      }
+    }
+
+    const results = await Promise.all(allLogPromises);
+
+    logger.info('Successfully processed CloudWatch log fetch requests.');
+    return NextResponse.json({ logGroups: results });
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in CloudWatch log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+
+// file: app/api/gcp/log/route.ts
+
+import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
+import { Logging } from '@google-cloud/logging';
+import logger from '@/utils/logger';
+
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
+
+export async function GET() {
+  try {
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    if (!settingsString) throw new Error('GCP settings not found.');
+
+    const settings: any = JSON.parse(settingsString);
+    const gcpKeys = settings.configs?.gcp?.GCP_PROJECT_KEYS_JSON;
+
+    if (!gcpKeys || !Array.isArray(gcpKeys) || gcpKeys.length === 0) {
+      throw new Error('GCP project keys are not configured in settings.');
+    }
+
+    const promises = gcpKeys.map(async (keyJson: string) => {
+      try {
+        const credentials = JSON.parse(keyJson);
+        const projectId = credentials.project_id;
+
+        const logging = new Logging({ projectId, credentials });
+
+        const filter = `timestamp>="${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}" AND logName !~ "cloudaudit.googleapis.com"`;
+        
+        const [entries] = await logging.getEntries({ filter, pageSize: 50, orderBy: 'timestamp desc' });
+        
+        logger.info({ project: projectId, count: entries.length }, "Found log entries for project.");
+
+        const logs = entries.map(entry => {
+          const metadata = entry.metadata;
+          let timestamp = new Date(metadata.timestamp as any).toISOString();
+          const severity = metadata.severity ?? 'DEFAULT';
+          let message = typeof entry.data === 'object' ? JSON.stringify(entry.data, null, 2) : String(entry.data);
+          return `${timestamp} | ${severity} | ${message.trim()}`;
+        }).join('\n');
+
+        return { projectId, logs: logs || 'No recent logs found.' };
+      } catch (err: any) {
+        logger.error({ err, partialKey: keyJson.slice(0, 50) }, `Failed to process a GCP key.`);
+        return { projectId: `Error processing a key`, logs: err.message };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    return NextResponse.json({ projectLogs: results });
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in GCP log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+
+//file: app\api\gemini\ask\route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const MODEL = 'gemini-1.5-flash';
+
+export async function POST(req: NextRequest) {
+  const { question, context } = await req.json() as {
+    question: string;
+    context:  string;
+  };
+
+  if (!process.env.GEMINI_API_KEY) {
+    return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 });
+  }
+
+  try {
+    /*  initialise model */
+    const ai    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = ai.getGenerativeModel({ model: MODEL });
+
+    /*  prompt (context already contains build summary + truncated logs) */
+    const prompt =
+      'You are an assistant analysing Jenkins console logs.\n' +
+      'Answer strictly from the provided context. If you cannot, say "I don’t see that in the logs."\n\n' +
+      '### Context ↓↓↓\n' +
+      context.slice(0, 25_000) +               // keep well under 32k tokens
+      '\n\n### Question\n' +
+      question;
+
+    const r       = await model.generateContent(prompt);
+    const answer  = r.response.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No answer';
+
+    return NextResponse.json({ answer });
+  } catch (err: any) {
+    console.error('Gemini error', err.message);
+    return NextResponse.json({ error: 'Gemini request failed' }, { status: 500 });
+  }
+}
+
+// file: app/api/jenkins/log/route.ts
+
+import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
+import logger from '@/utils/logger';
+
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
+
+export async function GET() {
+  try {
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    
+    if (!settingsString) {
+      throw new Error('Tool settings not found in the database.');
+    }
+    
+    const settings: any = JSON.parse(settingsString);
+    const jenkinsConfig = settings.configs?.jenkins;
+
+    const jobNamesStr = jenkinsConfig?.JENKINS_JOB_NAMES || jenkinsConfig?.JENKINS_JOB_NAME;
+
+    if (!jenkinsConfig?.JENKINS_BASE_URL || !jobNamesStr) {
+        throw new Error('Jenkins URL or Job Names are not configured in settings.');
+    }
+
+    const jobNames = jobNamesStr.split(',').map((name: string) => name.trim()).filter((name: string) => name);
+    const authHeader = `Basic ${btoa(`${jenkinsConfig.JENKINS_USER}:${jenkinsConfig.JENKINS_API_TOKEN}`)}`;
+
+    const allBuildsPromises = jobNames.map(async (jobName: string) => {
+      const encodedJobName = encodeURIComponent(jobName);
+      const jenkinsUrl = `${jenkinsConfig.JENKINS_BASE_URL}/job/${encodedJobName}/api/json?tree=builds[number,url]`;
+      
+      const res = await fetch(jenkinsUrl, { headers: { 'Authorization': authHeader } });
+      if (!res.ok) {
+        logger.warn(`Failed to fetch builds for job: ${jobName}`);
+        return [];
+      }
+      const data = await res.json();
+      return data.builds || [];
+    });
+
+    const allBuildsNested = await Promise.all(allBuildsPromises);
+    const allBuilds = allBuildsNested.flat();
+
+    const logPromises = allBuilds.slice(0, 15).map(async (build: any) => {
+      const logRes = await fetch(`${build.url}consoleText`, { headers: { 'Authorization': authHeader } });
+      const logText = await logRes.text();
+      return { build: build.number, log: logText };
+    });
+
+    const logs = await Promise.all(logPromises);
+
+    logger.info({ jobs: jobNames.length, builds: logs.length }, 'Successfully fetched Jenkins logs using settings from Redis.');
+    return NextResponse.json({ logs });
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in Jenkins log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+
+// file: app/api/settings/route.ts
+
+import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
+import logger from '@/utils/logger';
+
+// --- Redis Connection Setup ---
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+      logger.info('Successfully connected to Redis for settings route.');
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
+// -----------------------------
+
+// --- GET Handler: Load settings from Redis ---
+export async function GET() {
+  try {
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    
+    // DEBUG: Log the raw data we are loading from the database
+    logger.info({ loadedSettings: settingsString }, 'Data loaded from Redis:');
+
+    if (!settingsString) {
+      return NextResponse.json({ configs: {} });
+    }
+
+    const settings = JSON.parse(settingsString);
+    return NextResponse.json(settings);
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Failed to load settings from Redis.');
+    return NextResponse.json({ error: error.message || 'Could not load settings.' }, { status: 500 });
+  }
+}
+
+// --- POST Handler: Save settings to Redis ---
+export async function POST(request: Request) {
+  try {
+    await ensureRedisConnection();
+    const body = await request.json();
+    
+    // DEBUG: Log the data we are about to save
+    logger.info({ settingsToSave: body }, 'Data received to save to Redis:');
+
+    await redis.set(SETTINGS_KEY, JSON.stringify(body));
+    
+    logger.info('Successfully saved settings to Redis.');
+    return NextResponse.json({ message: 'Settings saved successfully!' });
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Failed to save settings to Redis.');
+    return NextResponse.json({ error: error.message || 'Could not save settings.' }, { status: 500 });
+  }
+}
+

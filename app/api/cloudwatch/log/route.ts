@@ -1,59 +1,81 @@
 // file: app/api/cloudwatch/log/route.ts
 
 import { NextResponse } from 'next/server';
-import {
-  CloudWatchLogsClient,
-  FilterLogEventsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
+import { createClient } from 'redis';
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import logger from '@/utils/logger';
 
-// Initialize the client once
-const client = new CloudWatchLogsClient({ region: process.env.AWS_REGION });
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
 
 export async function GET() {
-  // Read the comma-separated string from environment variables
-  const logGroupNamesStr = process.env.AWS_CLOUDWATCH_LOG_GROUPS;
-
-  if (!logGroupNamesStr) {
-    const errorMessage = 'AWS_CLOUDWATCH_LOG_GROUPS environment variable is not set.';
-    logger.error(errorMessage);
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
-  }
-  
-
-  // Split the string into an array of log group names
-  //const logGroupNames = logGroupNamesStr.split(',').map(name => name.trim());
-  const logGroupNames = logGroupNamesStr
-    .split(',')
-    .map(name => name.trim())
-    .filter(name => name); // This will remove empty strings
-
-  logger.info({ logGroupNames }, 'Fetching logs for specified CloudWatch log groups.');
-
   try {
-    // Create a fetch promise for each log group
-    const promises = logGroupNames.map(logGroupName => {
-      const command = new FilterLogEventsCommand({
-        logGroupName: logGroupName,
-        limit: 50, // Get the 50 most recent events per group
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    if (!settingsString) throw new Error('CloudWatch settings not found.');
+
+    const settings: any = JSON.parse(settingsString);
+    const awsConfig = settings.configs?.cloudwatch;
+
+    if (!awsConfig?.AWS_ACCESS_KEY_ID || !awsConfig?.AWS_SECRET_ACCESS_KEY || !awsConfig?.AWS_REGIONS_LOG_GROUPS) {
+      throw new Error('AWS credentials or region/log group config is missing in settings.');
+    }
+    
+    const regionConfigs = JSON.parse(awsConfig.AWS_REGIONS_LOG_GROUPS);
+
+    // This will hold promises for fetching logs from all groups across all regions
+    const allLogPromises: Promise<any>[] = [];
+
+    for (const config of regionConfigs) {
+      const { region, logGroups } = config;
+      if (!region || !logGroups || logGroups.length === 0) continue;
+
+      const client = new CloudWatchLogsClient({
+        region: region,
+        credentials: {
+          accessKeyId: awsConfig.AWS_ACCESS_KEY_ID,
+          secretAccessKey: awsConfig.AWS_SECRET_ACCESS_KEY,
+        },
       });
-      return client.send(command).then(response => ({
-        logGroupName,
-        logs: response.events?.map(event => event.message).join('\n') || 'No recent logs found.',
-      }));
-    });
 
-    // Wait for all fetches to complete
-    const results = await Promise.all(promises);
+      for (const logGroupName of logGroups) {
+        const command = new FilterLogEventsCommand({
+          logGroupName: logGroupName,
+          limit: 50,
+        });
+        
+        const promise = client.send(command).then(response => ({
+          region,
+          logGroupName,
+          logs: response.events?.map(event => event.message).join('\n') || 'No recent logs found.',
+        })).catch(err => {
+            logger.error({err, region, logGroupName}, "Failed to fetch logs for a specific group");
+            return { region, logGroupName, logs: `Error fetching logs: ${err.message}` };
+        });
 
-    // Return an array of objects, each containing the logs for one group
+        allLogPromises.push(promise);
+      }
+    }
+
+    const results = await Promise.all(allLogPromises);
+
+    logger.info('Successfully processed CloudWatch log fetch requests.');
     return NextResponse.json({ logGroups: results });
 
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to fetch logs from AWS CloudWatch.');
-    return NextResponse.json(
-      { error: 'Failed to fetch logs from AWS CloudWatch. Check server logs for details.' },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in CloudWatch log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

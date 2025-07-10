@@ -1,50 +1,74 @@
-// File: app/api/jenkins/log/route.ts
-import { NextResponse } from 'next/server';
+// file: app/api/jenkins/log/route.ts
 
-/** Change this to pull more/less history */
-const MAX_BUILDS = 50;
+import { NextResponse } from 'next/server';
+import { createClient } from 'redis';
+import logger from '@/utils/logger';
+
+const redis = createClient({ url: process.env.REDIS_URL });
+
+async function ensureRedisConnection() {
+  if (!redis.isOpen) {
+    try {
+      await redis.connect();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect to Redis.');
+      throw new Error('Database connection failed.');
+    }
+  }
+}
+
+const SETTINGS_KEY = 'app_tool_configurations';
 
 export async function GET() {
-  const base  = process.env.JENKINS_BASE_URL!;
-  const job   = process.env.JENKINS_JOB_NAME!;
-  const user  = process.env.JENKINS_USER!;
-  const token = process.env.JENKINS_API_TOKEN!;
-
-  if (!base || !job || !user || !token) {
-    return NextResponse.json(
-      { error: 'Missing Jenkins environment variables' },
-      { status: 500 },
-    );
-  }
-
   try {
-    const auth = 'Basic ' + Buffer.from(`${user}:${token}`).toString('base64');
+    await ensureRedisConnection();
+    const settingsString = await redis.get(SETTINGS_KEY);
+    
+    if (!settingsString) {
+      throw new Error('Tool settings not found in the database.');
+    }
+    
+    const settings: any = JSON.parse(settingsString);
+    const jenkinsConfig = settings.configs?.jenkins;
 
-    /* 1️⃣  get last N build numbers */
-    const metaURL =
-      `${base}/job/${encodeURIComponent(job)}/api/json` +
-      `?tree=builds[number]{0,${MAX_BUILDS}}`;
+    const jobNamesStr = jenkinsConfig?.JENKINS_JOB_NAMES || jenkinsConfig?.JENKINS_JOB_NAME;
 
-    const metaRes = await fetch(metaURL, { headers: { Authorization: auth } });
-    if (!metaRes.ok) throw new Error(`meta → ${metaRes.status}`);
-    const { builds = [] } = await metaRes.json() as { builds: { number: number }[] };
+    if (!jenkinsConfig?.JENKINS_BASE_URL || !jobNamesStr) {
+        throw new Error('Jenkins URL or Job Names are not configured in settings.');
+    }
 
-    /* 2️⃣ pull logs in parallel */
-    const logs = await Promise.all(
-      builds.map(async ({ number }) => {
-        const logURL = `${base}/job/${encodeURIComponent(job)}/${number}/consoleText`;
-        const r = await fetch(logURL, { headers: { Authorization: auth } });
-        const txt = r.ok ? await r.text() : '<log fetch failed>';
-        return { build: number, log: txt };
-      }),
-    );
+    const jobNames = jobNamesStr.split(',').map((name: string) => name.trim()).filter((name: string) => name);
+    const authHeader = `Basic ${btoa(`${jenkinsConfig.JENKINS_USER}:${jenkinsConfig.JENKINS_API_TOKEN}`)}`;
 
-    /* 3️⃣ newest → oldest */
-    logs.sort((a, b) => b.build - a.build);
+    const allBuildsPromises = jobNames.map(async (jobName: string) => {
+      const encodedJobName = encodeURIComponent(jobName);
+      const jenkinsUrl = `${jenkinsConfig.JENKINS_BASE_URL}/job/${encodedJobName}/api/json?tree=builds[number,url]`;
+      
+      const res = await fetch(jenkinsUrl, { headers: { 'Authorization': authHeader } });
+      if (!res.ok) {
+        logger.warn(`Failed to fetch builds for job: ${jobName}`);
+        return [];
+      }
+      const data = await res.json();
+      return data.builds || [];
+    });
 
+    const allBuildsNested = await Promise.all(allBuildsPromises);
+    const allBuilds = allBuildsNested.flat();
+
+    const logPromises = allBuilds.slice(0, 15).map(async (build: any) => {
+      const logRes = await fetch(`${build.url}consoleText`, { headers: { 'Authorization': authHeader } });
+      const logText = await logRes.text();
+      return { build: build.number, log: logText };
+    });
+
+    const logs = await Promise.all(logPromises);
+
+    logger.info({ jobs: jobNames.length, builds: logs.length }, 'Successfully fetched Jenkins logs using settings from Redis.');
     return NextResponse.json({ logs });
-  } catch (e: any) {
-    console.error('Jenkins log error', e);
-    return NextResponse.json({ error: 'Failed to load Jenkins logs' }, { status: 500 });
+
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error in Jenkins log route.');
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
