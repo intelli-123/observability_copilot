@@ -1,109 +1,119 @@
+
 # Observability Copilot
- Observability Copilot is a modern, AI-powered web application designed to centralize and simplify the monitoring of various development and cloud services. It provides a unified dashboard to view logs from multiple sources like Jenkins, AWS CloudWatch, and GCP Logs, and leverages Google's Gemini AI to offer intelligent insights and analysis of that log data.
 
-The application is built with a focus on a clean user experience, dynamic configuration, and a scalable architecture using modern web technologies.
+**Observability Copilot** is a modern, AI-powered web application designed to centralize and simplify the monitoring of various development and cloud services. It provides a unified dashboard to view logs from multiple sources such as **Jenkins**, **AWS CloudWatch**, and **Google Cloud Logging**, and integrates with **Google's Gemini AI** to deliver intelligent insights and log analysis.
 
-# Key Features
-Unified Dashboard: A central dashboard that displays all configured observability tools, showing their status at a glance.
+The application is built with a focus on user experience, dynamic configuration, and a scalable architecture using cutting-edge web technologies.
 
-Dynamic Configuration: A user-friendly settings interface to dynamically add, configure, and save credentials for various tools (Jenkins, AWS, GCP, etc.). All settings are securely stored in a cloud database.
+---
 
-Live Log Viewing: Dedicated pages to view real-time logs fetched directly from configured services.
+## 🔑 Key Features
 
-Multi-Source Support: The architecture is designed to handle multiple configurations for a single tool, such as fetching logs from multiple GCP projects or Jenkins jobs simultaneously.
+- **Unified Dashboard**: A central dashboard that displays all configured observability tools and their real-time status.
+- **Dynamic Configuration**: Easily add, edit, and store credentials for various tools like Jenkins, AWS, and GCP through a secure settings interface.
+- **Live Log Viewing**: Access real-time logs fetched directly from each configured service.
+- **Multi-Source Support**: Supports multiple configurations per tool, such as multiple GCP projects or Jenkins jobs.
+- **AI-Powered Analysis**: Ask natural language questions about your logs via an embedded Gemini chatbot to detect anomalies or summarize data.
+- **Professional UI**: Clean, dark-themed interface built with **Tailwind CSS** for a modern and responsive experience.
 
-AI-Powered Analysis: An integrated Gemini chatbot on each log page allows users to ask natural language questions about the log data to quickly identify issues or summarize events.
+---
 
-Professional UI: A clean, dark-themed interface built with Tailwind CSS for a modern and intuitive user experience.
+## 🧰 Tech Stack
 
-# Tech Stack
-Framework: Next.js (App Router)
+| Component     | Technology                    |
+|---------------|-------------------------------|
+| **Framework** | Next.js (App Router)          |
+| **Language**  | TypeScript                    |
+| **Styling**   | Tailwind CSS                  |
+| **Database**  | Vercel KV (Serverless Redis)  |
+| **AI**        | Google Gemini API             |
+| **Hosting**   | Vercel                        |
 
-Language: TypeScript
+---
 
-Styling: Tailwind CSS
+## 🚀 Getting Started
 
-Database: Vercel KV (Serverless Redis)
+Follow the steps below to get the project running locally for development and testing.
 
-AI: Google Gemini API
+---
 
-Deployment: Vercel
+### 📦 2. Install Dependencies, Set Up Database, Configure Environment
 
-# Getting Started
-Follow these steps to get the project running on your local machine for development and testing.
+1. **Install all required project dependencies:**
 
-Prerequisites
-Node.js (v18 or later recommended)
+   ```bash
+   npm install
+````
 
-npm or yarn
+2. **Set Up the Vercel KV Database:**
 
-A Vercel account (for Vercel KV database)
+   This project uses **Vercel KV** for storing configuration data securely.
 
-A Google Cloud account (for Gemini API key)
+   ```bash
+   npx vercel link
+   ```
 
-1. Clone the Repository
-First, clone the project to your local machine:
+   Follow the prompts to link your local project to your Vercel account and select the `observability_copilot` project.
 
-git clone <your-repository-url>
-cd observability-cig
+   Then, create a KV store:
 
-2. Install Dependencies
-Install all the necessary project dependencies using npm:
+   ```bash
+   npx vercel kv create
+   ```
 
-npm install
+   Follow the prompts to name the store (e.g., `observability-kv`) and select a region.
 
-3. Set Up the Database (Vercel KV)
-This project uses Vercel KV for storing tool configurations. You need to link your local project to a Vercel KV store.
+3. **Configure Environment Variables:**
 
-First, link your project to your Vercel account:
+   After the KV store is created, Vercel will automatically add the necessary environment variables to a `.env.local` file.
 
-npx vercel link
+   You need to manually add your **Gemini API key**.
 
-Follow the prompts to connect to your observability-copilot project on Vercel.
+   ```env
+   # .env.local
 
-Next, create the KV database. Vercel will automatically create the database and add the required environment variables to a new .env.local file.
+   REDIS_URL=""
+   VERCEL_OIDC_TOKEN=""
 
-npx vercel kv create
+   # Add your Gemini API Key
+   GEMINI_API_KEY="AIza..."  # Replace with your actual API key
+   ```
 
-Follow the prompts to name your database (e.g., observability-kv) and choose a region.
+---
 
-4. Configure Environment Variables
-Open the .env.local file that was created in the previous step. It will already contain your Vercel KV credentials. You need to add your Gemini API key.
+### 🖥️ 3. Run the Development Server
 
-# .env.local
+Start the development server locally:
 
-REDIS_URL=""
-VERCEL_OIDC_TOKEN=""
-
-# Add your Gemini API Key
-GEMINI_API_KEY="AIza..."
-
-5. Run the Development Server
-Now you are ready to start the application.
-
+```bash
 npm run dev
+```
 
-The application should now be running, typically at http://localhost:3000.
+This will start the app at [http://localhost:3000](http://localhost:3000)
 
-6. Using the Application
-Navigate to the homepage (http://localhost:3000).
+---
 
-Log in using the static credentials:
+### 🧪 4. Using the Application
 
-Username: admin
+1. Open [http://localhost:3001](http://localhost:3001)
 
-Password: admin
+2. Log in using:
 
-You will be redirected to the main dashboard.
+   ```
+   Username: admin
+   Password: admin
+   ```
 
-Navigate to the Settings page from the sidebar.
+3. Go to the **Settings** page in the sidebar.
 
-Click on a tool (e.g., Jenkins, GCP) to open its configuration page.
+4. Click on a tool (e.g., Jenkins, GCP) to configure.
 
-Enter the required credentials and click "Save Changes".
+5. Enter credentials and click **Save Changes**.
 
-Go back to the main dashboard. The card for the tool you just configured should now appear.
+6. Return to the dashboard — your tool card should appear.
 
-Click on the card to view its logs.
+7. Click the tool card to view logs.
 
-# Click on the Chat Robot ICON to ask Query about the logs
+8. 💬 Click the **Chat Robot Icon** to ask Gemini questions about the logs.
+
+---
