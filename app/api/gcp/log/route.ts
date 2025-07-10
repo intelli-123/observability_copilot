@@ -1,7 +1,3 @@
-// file: app/api/gcp/log/route.ts
-
-// file: app/api/gcp/log/route.ts
-
 import { NextResponse } from 'next/server';
 import { createClient } from 'redis';
 import { Logging } from '@google-cloud/logging';
@@ -26,7 +22,7 @@ export async function GET() {
   try {
     await ensureRedisConnection();
     const settingsString = await redis.get(SETTINGS_KEY);
-    if (!settingsString) throw new Error('GCP settings not found.');
+    if (!settingsString) throw new Error('GCP settings not found in database.');
 
     const settings: any = JSON.parse(settingsString);
     const gcpKeys = settings.configs?.gcp?.GCP_PROJECT_KEYS_JSON;

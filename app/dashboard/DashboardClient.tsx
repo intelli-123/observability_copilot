@@ -8,7 +8,11 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Settings, LogOut } from 'lucide-react';
 import clsx from 'clsx';
-import ConsoleLogViewer from '@/components/ConsoleLogViewer';
+import dynamic from 'next/dynamic'; // Import next/dynamic
+
+// --- Dynamically load components that are not critical for the initial view ---
+const ConsoleLogViewer = dynamic(() => import('@/components/ConsoleLogViewer'));
+const GeminiChatWidget = dynamic(() => import('@/components/GeminiChatWidget'));
 
 // This component receives the pre-fetched vendor data as a prop
 export default function DashboardClient({ vendors }: { vendors: any[] }) {
@@ -18,10 +22,22 @@ export default function DashboardClient({ vendors }: { vendors: any[] }) {
     router.push('/');
   };
 
-  // Helper functions for styling remain the same
-  const border = (r: number) => (r === 1 ? 'border-green-400' : r === 2 ? 'border-orange-400' : 'border-red-400');
-  const text = (r: number) => (r === 1 ? 'text-green-400' : r === 2 ? 'text-orange-400' : 'text-red-400');
-  const label = (r: number) => (r === 1 ? 'Connected' : r === 2 ? 'Disconnected' : 'Disabled');
+  // Helper functions for styling based on the pre-calculated rank
+  const border = (r: number) => {
+    if (r === 1) return 'border-green-400';    // Connected
+    if (r === 2) return 'border-orange-400';  // Disconnected
+    return 'border-red-400';                 // Disabled
+  };
+  const text = (r: number) => {
+    if (r === 1) return 'text-green-400';
+    if (r === 2) return 'text-orange-400';
+    return 'text-red-400';
+  };
+  const label = (r: number) => {
+    if (r === 1) return 'Connected';
+    if (r === 2) return 'Disconnected';
+    return 'Disabled';
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-900 text-gray-100 font-sans">
@@ -64,7 +80,14 @@ export default function DashboardClient({ vendors }: { vendors: any[] }) {
       </aside>
 
       <main className="flex-1 px-6 py-8">
-        <h1 className="text-3xl font-semibold tracking-tight mb-8">Observability Status</h1>
+        <div className="mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white">
+            Observability Status
+          </h1>
+          <p className="mt-2 text-gray-400">
+            A real-time overview of your configured monitoring tools.
+          </p>
+        </div>
 
         {vendors.length > 0 ? (
           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -104,6 +127,7 @@ export default function DashboardClient({ vendors }: { vendors: any[] }) {
         )}
       </main>
       
+      {/* Replaced chat widget with icon and tooltip */}
       <div className="group fixed bottom-6 right-6 z-50">
         <div className="relative flex items-center">
           <div className="absolute right-full mr-4 whitespace-nowrap bg-black text-white text-xs font-semibold px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">

@@ -8,7 +8,10 @@ import Link from "next/link";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Observability-CIG",
+  title: "Observability-Copilot",
+  icons: {
+    icon: '/new_ico.ico',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

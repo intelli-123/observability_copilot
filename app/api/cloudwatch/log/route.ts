@@ -35,12 +35,11 @@ export async function GET() {
     
     const regionConfigs = JSON.parse(awsConfig.AWS_REGIONS_LOG_GROUPS);
 
-    // This will hold promises for fetching logs from all groups across all regions
     const allLogPromises: Promise<any>[] = [];
 
     for (const config of regionConfigs) {
       const { region, logGroups } = config;
-      if (!region || !logGroups || logGroups.length === 0) continue;
+      if (!region || !logGroups || !Array.isArray(logGroups) || logGroups.length === 0) continue;
 
       const client = new CloudWatchLogsClient({
         region: region,

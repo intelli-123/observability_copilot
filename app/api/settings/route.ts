@@ -1,34 +1,18 @@
 // file: app/api/settings/route.ts
 
 import { NextResponse } from 'next/server';
-import { createClient } from 'redis';
 import logger from '@/utils/logger';
-
-// --- Redis Connection Setup ---
-const redis = createClient({ url: process.env.REDIS_URL });
-
-async function ensureRedisConnection() {
-  if (!redis.isOpen) {
-    try {
-      await redis.connect();
-      logger.info('Successfully connected to Redis for settings route.');
-    } catch (err) {
-      logger.error({ err }, 'Failed to connect to Redis.');
-      throw new Error('Database connection failed.');
-    }
-  }
-}
+import { getRedisClient } from '@/utils/redisClient'; // Import the shared client
 
 const SETTINGS_KEY = 'app_tool_configurations';
-// -----------------------------
 
 // --- GET Handler: Load settings from Redis ---
 export async function GET() {
   try {
-    await ensureRedisConnection();
+    // Get the connected Redis client from our utility
+    const redis = await getRedisClient();
     const settingsString = await redis.get(SETTINGS_KEY);
     
-    // DEBUG: Log the raw data we are loading from the database
     logger.info({ loadedSettings: settingsString }, 'Data loaded from Redis:');
 
     if (!settingsString) {
@@ -47,10 +31,10 @@ export async function GET() {
 // --- POST Handler: Save settings to Redis ---
 export async function POST(request: Request) {
   try {
-    await ensureRedisConnection();
+    // Get the connected Redis client from our utility
+    const redis = await getRedisClient();
     const body = await request.json();
     
-    // DEBUG: Log the data we are about to save
     logger.info({ settingsToSave: body }, 'Data received to save to Redis:');
 
     await redis.set(SETTINGS_KEY, JSON.stringify(body));
@@ -63,4 +47,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Could not save settings.' }, { status: 500 });
   }
 }
-

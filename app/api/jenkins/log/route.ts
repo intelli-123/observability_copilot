@@ -1,29 +1,27 @@
 // file: app/api/jenkins/log/route.ts
 
 import { NextResponse } from 'next/server';
-import { createClient } from 'redis';
 import logger from '@/utils/logger';
-
-const redis = createClient({ url: process.env.REDIS_URL });
-
-async function ensureRedisConnection() {
-  if (!redis.isOpen) {
-    try {
-      await redis.connect();
-    } catch (err) {
-      logger.error({ err }, 'Failed to connect to Redis.');
-      throw new Error('Database connection failed.');
-    }
-  }
-}
+import { getRedisClient } from '@/utils/redisClient'; // Import the shared client
 
 const SETTINGS_KEY = 'app_tool_configurations';
+const CACHE_KEY = 'cache:jenkins-logs';
+const CACHE_EXPIRATION_SECONDS = 300; // 5 minutes
 
 export async function GET() {
   try {
-    await ensureRedisConnection();
+    const redis = await getRedisClient();
+
+    // 1. Check for cached data first
+    const cachedData = await redis.get(CACHE_KEY);
+    if (cachedData) {
+      logger.info('Returning Jenkins logs from cache.');
+      return NextResponse.json(JSON.parse(cachedData));
+    }
+
+    // 2. If no cache, fetch fresh data
+    logger.info('Cache miss. Fetching fresh Jenkins logs.');
     const settingsString = await redis.get(SETTINGS_KEY);
-    
     if (!settingsString) {
       throw new Error('Tool settings not found in the database.');
     }
@@ -32,7 +30,6 @@ export async function GET() {
     const jenkinsConfig = settings.configs?.jenkins;
 
     const jobNamesStr = jenkinsConfig?.JENKINS_JOB_NAMES || jenkinsConfig?.JENKINS_JOB_NAME;
-
     if (!jenkinsConfig?.JENKINS_BASE_URL || !jobNamesStr) {
         throw new Error('Jenkins URL or Job Names are not configured in settings.');
     }
@@ -63,9 +60,13 @@ export async function GET() {
     });
 
     const logs = await Promise.all(logPromises);
+    const responsePayload = { logs };
 
-    logger.info({ jobs: jobNames.length, builds: logs.length }, 'Successfully fetched Jenkins logs using settings from Redis.');
-    return NextResponse.json({ logs });
+    // 3. Save the fresh data to the cache with a 5-minute expiration
+    await redis.set(CACHE_KEY, JSON.stringify(responsePayload), { EX: CACHE_EXPIRATION_SECONDS });
+    logger.info('Saved fresh Jenkins logs to cache.');
+
+    return NextResponse.json(responsePayload);
 
   } catch (error: any) {
     logger.error({ err: error }, 'Error in Jenkins log route.');
