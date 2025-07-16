@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata = {
   title: "Observability-Copilot",
   icons: {
-    icon: '/new_ico.ico',
+    icon: '/favicon.ico',
   },
 };
 

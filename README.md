@@ -117,3 +117,24 @@ This will start the app at [http://localhost:3000](http://localhost:3000)
 8. 💬 Click the **Chat Robot Icon** to ask Gemini questions about the logs.
 
 ---
+## Dockerfile:
+Running with Docker
+Alternatively, you can build and run the application using Docker. This is a great way to ensure a consistent environment.
+
+1. Build the Docker Image
+From the root of the project, run the docker build command. This will create a production-ready image named observability-copilot.
+
+docker build -t observability-copilot .
+
+2. Run the Docker Container
+After the image is built, run it using the docker run command. You must pass in your environment variables from your .env.local file using the -e flag.
+
+docker run -p 3000:3000 \
+  -e KV_URL="..." \
+  -e KV_REST_API_URL="..." \
+  -e KV_REST_API_TOKEN="..." \
+  -e KV_REST_API_READ_ONLY_TOKEN="..." \
+  -e GEMINI_API_KEY="..." \
+  observability-copilot
+
+The application will be available at http://localhost:3000.

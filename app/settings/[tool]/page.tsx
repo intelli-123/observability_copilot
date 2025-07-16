@@ -64,13 +64,15 @@ export default function ToolSettingsPage() {
   };
 
   if (!toolConfig) {
-    return (
-      <SettingsPageLayout
-        title="Error"
-        description="Tool configuration not found."
-      />
-    );
-  }
+  return (
+    <SettingsPageLayout
+      title="Error"
+      description="Tool configuration not found."
+    >
+      <p className="text-red-400">The tool configuration could not be found.</p>
+    </SettingsPageLayout>
+  );
+}
 
   return (
     <SettingsPageLayout

@@ -9,6 +9,7 @@ type LogPageTemplateProps = {
   title: string;
   iconSrc?: string;
   iconAlt?: string;
+  description?: string;
   children: React.ReactNode;
 };
 

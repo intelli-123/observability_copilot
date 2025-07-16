@@ -23,7 +23,7 @@
 .env.development.local
 .env.test.local
 .env.production.local
-
+.env.salesforce
 # Secret key files
 # IMPORTANT: Never commit service account keys or other secrets
 *.json
