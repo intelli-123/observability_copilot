@@ -30,7 +30,6 @@ COPY --from=base /app/.next ./.next
 COPY --from=base /app/public ./public
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
-COPY --from=base /app/next.config.js ./next.config.js
 
 RUN echo "🔍 Checking if next is available:" && ls -l node_modules/.bin/next
 
@@ -39,6 +38,5 @@ RUN echo "✅ Production image files:" && ls -al
 
 # Expose Next.js port
 EXPOSE 3000
-
 # Start the app
 CMD ["npm", "start"]
