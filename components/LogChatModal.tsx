@@ -92,7 +92,7 @@ export default function LogChatModal({ vendor, onClose }: Props) {
           {messages.length === 0 && !isLoading && (
             <div className="text-center text-gray-400 h-full flex flex-col justify-center items-center">
                 <p>Ask a question to get started.</p>
-                <p className="text-sm mt-2">e.g., "Find all open opportunities for the Acme Corp account"</p>
+                <p className="text-sm mt-2">e.g., "Find all open opportunities for the Acme Corp account, List all Log Groups"</p>
             </div>
           )}
           {messages.map((msg, i) => (

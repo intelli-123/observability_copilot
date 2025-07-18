@@ -4,8 +4,9 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { TOOL_CONFIGS } from '@/constants/tools';
-import { Save } from 'lucide-react';
-import SettingsPageLayout from '@/components/SettingsPageLayout'; // Import the new layout
+import Link from 'next/link';
+import { ArrowLeft, Save } from 'lucide-react';
+import SettingsPageLayout from '@/components/SettingsPageLayout';
 
 type AllConfigs = Record<string, Record<string, string>>;
 
@@ -25,13 +26,16 @@ export default function ToolSettingsPage() {
         const res = await fetch('/api/settings');
         if (!res.ok) throw new Error('Failed to fetch settings');
         const data = await res.json();
+        
         const fullConfigs = data.configs || {};
         setAllConfigs(fullConfigs);
+        
         if (toolKey && fullConfigs[toolKey]) {
           setFormState(fullConfigs[toolKey]);
         }
       } catch (error) {
         console.error("Failed to load settings from API", error);
+        setSaveStatus({ message: "Could not load settings.", type: 'error' });
       } finally {
         setIsLoading(false);
       }
@@ -47,32 +51,39 @@ export default function ToolSettingsPage() {
   const handleSave = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaveStatus({ message: 'Saving...', type: 'success' });
-    const newConfigsToSave = { ...allConfigs, [toolKey]: formState };
+
+    const newConfigsToSave = {
+      ...allConfigs,
+      [toolKey]: formState,
+    };
+
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ configs: newConfigsToSave }),
       });
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to save');
+      
       setSaveStatus({ message: result.message, type: 'success' });
     } catch (error: any) {
-      setSaveStatus({ message: error.message, type: 'error' });
+      setSaveStatus({ message: error.message || 'Failed to save settings.', type: 'error' });
     }
     setTimeout(() => setSaveStatus(null), 3000);
   };
 
   if (!toolConfig) {
-  return (
-    <SettingsPageLayout
-      title="Error"
-      description="Tool configuration not found."
-    >
-      <p className="text-red-400">The tool configuration could not be found.</p>
-    </SettingsPageLayout>
-  );
-}
+    return (
+      <SettingsPageLayout
+        title="Error"
+        description="Tool configuration not found."
+      >
+        <></>
+      </SettingsPageLayout>
+    );
+  }
 
   return (
     <SettingsPageLayout
@@ -88,14 +99,26 @@ export default function ToolSettingsPage() {
               <label htmlFor={field.key} className="block text-sm font-medium text-gray-300 mb-2">
                 {field.label}
               </label>
-              <input
-                id={field.key}
-                type="text"
-                value={formState[field.key] || ''}
-                onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                placeholder={field.placeholder}
-                className="w-full pl-4 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-              />
+              {/* This logic now correctly renders different input types */}
+              {field.type === 'textarea' || field.isJson ? (
+                <textarea
+                  id={field.key}
+                  value={formState[field.key] || ''}
+                  onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                  placeholder={field.placeholder}
+                  className="w-full h-32 pl-4 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-xs"
+                />
+              ) : (
+                <input
+                  id={field.key}
+                  // This now correctly sets the input type to 'password' for secret fields
+                  type={field.type === 'password' ? 'password' : 'text'}
+                  value={formState[field.key] || ''}
+                  onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                  placeholder={field.placeholder}
+                  className="w-full pl-4 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+              )}
             </div>
           ))}
           <footer className="flex items-center justify-end pt-6 border-t border-gray-700 gap-4">
@@ -113,4 +136,3 @@ export default function ToolSettingsPage() {
     </SettingsPageLayout>
   );
 }
-

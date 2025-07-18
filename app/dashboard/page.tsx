@@ -2,9 +2,11 @@
 import { createClient } from 'redis';
 import { getVendorList } from '@/utils/envUtils';
 import DashboardClient from './DashboardClient';
-import logger from '@/utils/logger';
 
-// This is now an async Server Component
+// This line tells Next.js to always render this page dynamically at request time.
+export const dynamic = 'force-dynamic';
+
+// This is an async Server Component
 export default async function DashboardPage() {
   
   // 1. Fetch all settings from the database on the server
@@ -23,13 +25,12 @@ export default async function DashboardPage() {
     .map((vendor) => {
       const isConfigured = !!savedConfigs[vendor.key];
       
-      // If the tool is configured, we now assume it's connected (rank 1, green).
-      // If not configured, it's disabled (rank 3, red).
+      // If the tool is configured, we now assume it's connected.
       const rank = isConfigured ? 1 : 3; 
 
       return { ...vendor, rank };
     })
-    // 3. Filter to only show configured tools, then sort
+    // 3. Filter to only show tools that have been configured
     .filter(vendor => savedConfigs[vendor.key])
     .sort((a, b) => a.rank - b.rank);
 

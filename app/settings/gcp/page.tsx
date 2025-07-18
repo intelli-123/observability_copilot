@@ -1,15 +1,19 @@
 // file: app/settings/gcp/page.tsx
+// this is for maintaining multiple GCP accounts
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
 import { TOOL_CONFIGS } from '@/constants/tools';
-import { Save, PlusCircle, XCircle } from 'lucide-react';
+import { Save, PlusCircle, XCircle, Eye, EyeOff } from 'lucide-react'; // Import Eye icons
 import SettingsPageLayout from '@/components/SettingsPageLayout';
+import clsx from 'clsx'; // Import clsx for conditional classes
 
 export default function GcpSettingsPage() {
   const toolConfig = TOOL_CONFIGS.find(t => t.key === 'gcp');
 
   const [projectKeys, setProjectKeys] = useState<string[]>(['']);
+  // New state to track which keys are currently revealed
+  const [revealedIndexes, setRevealedIndexes] = useState<number[]>([]);
   const [saveStatus, setSaveStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,6 +50,14 @@ export default function GcpSettingsPage() {
   const removeProject = (index: number) => {
     const newKeys = projectKeys.filter((_, i) => i !== index);
     setProjectKeys(newKeys);
+    // Also remove from revealed if it exists
+    setRevealedIndexes(prev => prev.filter(i => i !== index));
+  };
+
+  const toggleReveal = (index: number) => {
+    setRevealedIndexes(prev => 
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
   };
 
   const handleSave = async (e: FormEvent<HTMLFormElement>) => {
@@ -80,11 +92,7 @@ export default function GcpSettingsPage() {
 
   if (!toolConfig) {
     return (
-      <SettingsPageLayout
-        title="Error"
-        description="Tool configuration for GCP not found."
-      >
-        {/* This empty fragment satisfies the 'children' requirement */}
+      <SettingsPageLayout title="Error" description="Tool configuration for GCP not found.">
         <></>
       </SettingsPageLayout>
     );
@@ -99,29 +107,53 @@ export default function GcpSettingsPage() {
     >
       {isLoading ? <p className="text-center py-10">Loading...</p> : (
         <form onSubmit={handleSave} className="space-y-6 bg-gray-800 p-8 rounded-2xl border border-gray-700">
-          {projectKeys.map((key, index) => (
-            <div key={index} className="space-y-2 relative group">
-              <label className="block text-sm font-medium text-gray-300">
-                Project {index + 1} - Service Account JSON
-              </label>
-              <textarea
-                value={key}
-                onChange={(e) => handleKeyChange(index, e.target.value)}
-                placeholder="Paste the entire content of your service account key file here..."
-                className="w-full h-32 pl-4 pr-10 py-2.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-xs"
-              />
-              {projectKeys.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeProject(index)}
-                  className="absolute top-0 right-0 mt-1 mr-1 p-1 text-gray-500 hover:text-red-400 rounded-full opacity-50 group-hover:opacity-100 transition-opacity"
-                  aria-label="Remove Project"
-                >
-                  <XCircle size={18} />
-                </button>
-              )}
-            </div>
-          ))}
+          {projectKeys.map((key, index) => {
+            const isRevealed = revealedIndexes.includes(index);
+            const hasValue = key && key.trim() !== '';
+
+            return (
+              <div key={index} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Project {index + 1} - Service Account JSON
+                  </label>
+                  {/* Show/Hide button appears only if there's a saved value */}
+                  {hasValue && (
+                    <button type="button" onClick={() => toggleReveal(index)} className="text-gray-400 hover:text-white p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                      {isRevealed ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  )}
+                </div>
+                <div className="relative group">
+                  <textarea
+                    value={isRevealed || !hasValue ? key : '********************'}
+                    onChange={(e) => handleKeyChange(index, e.target.value)}
+                    placeholder="Paste the entire content of your service account key file here..."
+                    className={clsx(
+                      "w-full h-32 pl-4 pr-10 py-2.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-xs",
+                      !isRevealed && hasValue && "blur-sm select-none" // Add blur effect for better masking
+                    )}
+                    // Automatically reveal the content when the user clicks to edit it
+                    onFocus={() => {
+                      if (hasValue && !isRevealed) {
+                        toggleReveal(index);
+                      }
+                    }}
+                  />
+                  {projectKeys.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeProject(index)}
+                      className="absolute top-1 right-1 p-1 text-gray-500 hover:text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove Project"
+                    >
+                      <XCircle size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           
           <button
             type="button"

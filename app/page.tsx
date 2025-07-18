@@ -1,4 +1,5 @@
 // file: app/page.tsx
+// main login screen
 'use client';
 
 import { useState } from 'react';

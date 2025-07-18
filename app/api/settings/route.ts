@@ -1,20 +1,17 @@
 // file: app/api/settings/route.ts
 
 import { NextResponse } from 'next/server';
+import { getRedisClient } from '@/utils/redisClient';
 import logger from '@/utils/logger';
-import { getRedisClient } from '@/utils/redisClient'; // Import the shared client
 
 const SETTINGS_KEY = 'app_tool_configurations';
 
 // --- GET Handler: Load settings from Redis ---
 export async function GET() {
   try {
-    // Get the connected Redis client from our utility
     const redis = await getRedisClient();
     const settingsString = await redis.get(SETTINGS_KEY);
     
-    logger.info({ loadedSettings: settingsString }, 'Data loaded from Redis:');
-
     if (!settingsString) {
       return NextResponse.json({ configs: {} });
     }
@@ -28,18 +25,28 @@ export async function GET() {
   }
 }
 
-// --- POST Handler: Save settings to Redis ---
+// --- POST Handler: Save settings and clear caches ---
 export async function POST(request: Request) {
   try {
-    // Get the connected Redis client from our utility
     const redis = await getRedisClient();
     const body = await request.json();
     
-    logger.info({ settingsToSave: body }, 'Data received to save to Redis:');
-
+    // 1. Save the new settings
     await redis.set(SETTINGS_KEY, JSON.stringify(body));
+    logger.info({ settingsToSave: body }, 'Successfully saved new settings to Redis.');
+
+    // 2. Dynamically find all log cache keys using the KEYS command
+    const logCacheKeys = await redis.keys('cache:*');
+
+    // 3. If keys are found, delete them.
+    if (logCacheKeys.length > 0) {
+      logger.info({ keysToDelete: logCacheKeys }, 'Found stale log caches to clear.');
+      await redis.del(logCacheKeys);
+      logger.info('Successfully cleared stale log caches.');
+    } else {
+      logger.info('No log caches found to clear.');
+    }
     
-    logger.info('Successfully saved settings to Redis.');
     return NextResponse.json({ message: 'Settings saved successfully!' });
 
   } catch (error: any) {

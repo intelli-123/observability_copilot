@@ -18,12 +18,12 @@ out
 
 # Ignore secret key files.
 # These should never be included in a Docker image.
-*.json
+#*.json
 *.pem
 
 # Ignore Docker files themselves.
-Dockerfile
-.dockerignore
+#Dockerfile
+#.dockerignore
 
 # Ignore Git directory and files.
 .git

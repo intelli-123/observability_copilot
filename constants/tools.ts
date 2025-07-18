@@ -68,6 +68,7 @@ export const TOOL_CONFIGS: ToolConfig[] = [
         label: 'GitLab Personal Access Token', 
         placeholder: 'Enter your GitLab API token',
         type: 'password',
+        isSecret: true
       },
       {
         key: 'GITLAB_PROJECT_IDS',
@@ -78,25 +79,6 @@ export const TOOL_CONFIGS: ToolConfig[] = [
     ],
   },
   {
-    key: 'dynatrace',
-    name: 'Dynatrace',
-    description: 'Configure your Dynatrace integration.',
-    logo: '/logos/dynatrace.png',
-    fields: [
-      { key: 'DYNATRACE_API_TOKEN', label: 'API Token', placeholder: 'Enter your Dynatrace API token' },
-      { key: 'DYNATRACE_ENVIRONMENT_ID', label: 'Environment ID', placeholder: 'Enter your Dynatrace Environment ID' },
-    ],
-  },
-  {
-    key: 'sysdig',
-    name: 'Sysdig',
-    description: 'Configure your Sysdig integration.',
-    logo: '/logos/sysdig.png',
-    fields: [
-      { key: 'SYSDIG_API_TOKEN', label: 'API Token', placeholder: 'Enter your Sysdig API token' },
-    ],
-  },
-   {
     key: 'mcp-salesforce',
     name: 'MCP for Salesforce',
     description: 'Provide your Salesforce credentials to enable the MCP server.',
@@ -105,8 +87,8 @@ export const TOOL_CONFIGS: ToolConfig[] = [
       { key: 'SALESFORCE_INSTANCE_URL', label: 'Salesforce Instance URL', placeholder: 'https://your-instance.my.salesforce.com' },
       { key: 'SALESFORCE_CONNECTION_TYPE', label: 'salesforce Connection Type', placeholder: 'User_Password use this only' },
       { key: 'SALESFORCE_USERNAME', label: 'Salesforce Username', placeholder: 'your.email@example.com' },
-      { key: 'SALESFORCE_PASSWORD', label: 'Salesforce Password', placeholder: 'Enter your password', type: 'password' },
-      { key: 'SALESFORCE_TOKEN', label: 'Salesforce Security Token', placeholder: 'Enter your security token', type: 'password' },
+      { key: 'SALESFORCE_PASSWORD', label: 'Salesforce Password', placeholder: 'Enter your password', type: 'password' , isSecret: true},
+      { key: 'SALESFORCE_TOKEN', label: 'Salesforce Security Token', placeholder: 'Enter your security token', type: 'password' , isSecret : true},
     ],
   },
   {
@@ -116,7 +98,7 @@ export const TOOL_CONFIGS: ToolConfig[] = [
     logo: '/logos/cloudwatch.png', // Using the existing AWS logo
     fields: [
       { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', placeholder: 'Your AWS Access Key' },
-      { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Access Key', placeholder: 'Your AWS Secret Key', type: 'password' },
+      { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Access Key', placeholder: 'Your AWS Secret Key', type: 'password' , isSecret:true},
       { key: 'AWS_REGION', label: 'AWS Region', placeholder: 'e.g., us-east-1' },
     ],
   },

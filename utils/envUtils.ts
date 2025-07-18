@@ -3,27 +3,6 @@
 export const getVendorList = () => {
   return [
     { 
-      key: 'datadog',
-      name: 'Datadog',
-      logo: '/logos/datadog.png',
-      link: '/logs/datadog',
-      type: 'log', // Standard log viewer
-    },
-    { 
-      key: 'dynatrace',
-      name: 'Dynatrace',
-      logo: '/logos/dynatrace.png',
-      link: '/logs/dynatrace',
-      type: 'log',
-    },
-    { 
-      key: 'sysdig',
-      name: 'Sysdig',
-      logo: '/logos/sysdig.png',
-      link: '/logs/sysdig',
-      type: 'log',
-    },
-    { 
       key: 'cloudwatch',
       name: 'AWS CloudWatch',
       logo: '/logos/cloudwatch.png',
@@ -56,6 +35,7 @@ export const getVendorList = () => {
       key: 'mcp-salesforce',
       name: 'MCP for Salesforce',
       logo: '/logos/salesforce.png',
+      badge: 'MCP-Client',
       link: '/logs/mcp-salesforce', // This is still used to build the API path
       type: 'mcp', // Interactive MCP query tool
     },
@@ -64,6 +44,7 @@ export const getVendorList = () => {
       name: 'MCP for CloudWatch',
       logo: '/logos/cloudwatch.png',
       link: '/logs/mcp-cloudwatch',
+      badge: 'MCP-Client',
       type: 'mcp',
     },
   ] as const;

@@ -1,51 +1,44 @@
-# Dockerfile for Next.js Application
+# === Base stage: build ===
+FROM node:22.17.0-alpine3.22 AS base
 
-# 1. Base Image: Use an official Node.js image.
-# Using a specific version is recommended for production for consistency.
-FROM node:18-alpine AS base
-
-# 2. Set Working Directory
+# Set working directory
 WORKDIR /app
 
-# 3. Install Dependencies
-# First, copy over package.json and lock files to leverage Docker cache.
+# Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN echo "📦 Installing dependencies..." && npm install
 
-# 4. Copy Application Code
-# Copy only the necessary files for the build to optimize caching.
-COPY app ./app
-COPY components ./components
-COPY config ./config
-COPY constants ./constants
-COPY public ./public
-COPY utils ./utils
-COPY styles ./styles
-COPY next.config.js ./
-COPY postcss.config.js ./
-COPY tailwind.config.ts ./
-COPY tsconfig.json ./
+# Copy rest of the application code
+COPY . .
 
+# Debug: list contents
+RUN echo "📁 Files in /app:" && ls -al
 
-# 5. Build the Application
-# This command runs the `next build` script from your package.json.
-RUN npm run build
+# Debug: check node and npm versions
+RUN echo "🐢 Node version: $(node -v)" && echo "📘 NPM version: $(npm -v)"
 
-# 6. Production Image
-# Create a smaller, more secure production image.
-FROM node:18-alpine AS production
+# Build Next.js app
+RUN echo "🐢 Building the application..." && npm run build
+
+# === Production stage: run ===
+FROM node:22.17.0-alpine3.22 AS production
 
 WORKDIR /app
 
-# Copy the built application from the 'base' stage.
+# Copy necessary files from build stage
 COPY --from=base /app/.next ./.next
+COPY --from=base /app/public ./public
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
-COPY --from=base /app/public ./public
+COPY --from=base /app/next.config.js ./next.config.js
 
-# 7. Expose Port and Start the Application
-# Expose the port the app will run on (default for Next.js is 3000).
+RUN echo "🔍 Checking if next is available:" && ls -l node_modules/.bin/next
+
+# Debug: confirm copied files
+RUN echo "✅ Production image files:" && ls -al
+
+# Expose Next.js port
 EXPOSE 3000
 
-# This command runs the `next start` script from your package.json.
+# Start the app
 CMD ["npm", "start"]
