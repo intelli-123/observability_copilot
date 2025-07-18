@@ -27,7 +27,7 @@ The application is built with a focus on user experience, dynamic configuration,
 | **Styling**   | Tailwind CSS                  |
 | **Database**  | Vercel KV (Serverless Redis)  |
 | **AI**        | Google Gemini API             |
-| **Hosting**   | Vercel                        |
+| **Hosting**   | Local, Docker                       |
 
 ---
 
@@ -43,7 +43,7 @@ Follow the steps below to get the project running locally for development and te
 
    ```bash
    npm install
-````
+   ```
 
 2. **Set Up the Vercel KV Database:**
 
@@ -95,7 +95,7 @@ This will start the app at [http://localhost:3000](http://localhost:3000)
 
 ### 🧪 4. Using the Application
 
-1. Open [http://localhost:3001](http://localhost:3001)
+1. Open [http://localhost:3000](http://localhost:3000)
 
 2. Log in using:
 
@@ -127,14 +127,8 @@ From the root of the project, run the docker build command. This will create a p
 docker build -t observability-copilot .
 
 2. Run the Docker Container
-After the image is built, run it using the docker run command. You must pass in your environment variables from your .env.local file using the -e flag.
+After the image is built, run it using the docker run command. You must pass in your environment variables from your .env.local or .env file using the -e flag.
 
-docker run -p 3000:3000 \
-  -e KV_URL="..." \
-  -e KV_REST_API_URL="..." \
-  -e KV_REST_API_TOKEN="..." \
-  -e KV_REST_API_READ_ONLY_TOKEN="..." \
-  -e GEMINI_API_KEY="..." \
-  observability-copilot
+
 
 The application will be available at http://localhost:3000.
