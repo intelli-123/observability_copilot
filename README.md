@@ -7,6 +7,10 @@ The application is built with a focus on user experience, dynamic configuration,
 
 ---
 
+MCP Servers Uisng:
+npx install @hyorimitsu/amazon-cloudwatch-logs-mcp-server
+[text](https://github.com/hyorimitsu/mcp-amazon-cloudwatch-logs)
+
 ## 🔑 Key Features
 
 - **Unified Dashboard**: A central dashboard that displays all configured observability tools and their real-time status.

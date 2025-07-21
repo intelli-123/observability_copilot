@@ -8,6 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN echo "📦 Installing dependencies..." && npm install
 
+RUN npm install -g @hyorimitsu/amazon-cloudwatch-logs-mcp-server
+
 # Copy rest of the application code
 COPY . .
 
