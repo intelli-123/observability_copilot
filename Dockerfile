@@ -27,6 +27,9 @@ FROM node:22.17.0-alpine3.22 AS production
 
 WORKDIR /app
 
+# Install MCP server globally again
+RUN npm install -g @hyorimitsu/amazon-cloudwatch-logs-mcp-server
+
 # Copy necessary files from build stage
 COPY --from=base /app/.next ./.next
 COPY --from=base /app/public ./public
