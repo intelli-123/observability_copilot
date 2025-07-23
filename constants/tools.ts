@@ -100,6 +100,7 @@ export const TOOL_CONFIGS: ToolConfig[] = [
       { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', placeholder: 'Your AWS Access Key' },
       { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Access Key', placeholder: 'Your AWS Secret Key', type: 'password' , isSecret:true},
       { key: 'AWS_REGION', label: 'AWS Region', placeholder: 'e.g., us-east-1' },
+      { key: 'AWS_REGIONS', label: 'AWS Regions', placeholder: 'e.g., us-east-1' },
     ],
   },
 ];

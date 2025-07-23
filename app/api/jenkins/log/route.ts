@@ -1,26 +1,27 @@
 // file: app/api/jenkins/log/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getRedisClient } from '@/utils/redisClient';
 import logger from '@/utils/logger';
-import { getRedisClient } from '@/utils/redisClient'; // Import the shared client
 
 const SETTINGS_KEY = 'app_tool_configurations';
 const CACHE_KEY = 'cache:jenkins-logs';
 const CACHE_EXPIRATION_SECONDS = 300; // 5 minutes
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const redis = await getRedisClient();
+    const cacheBust = request.nextUrl.searchParams.get('cacheBust');
 
-    // 1. Check for cached data first
-    const cachedData = await redis.get(CACHE_KEY);
-    if (cachedData) {
-      logger.info('Returning Jenkins logs from cache.');
-      return NextResponse.json(JSON.parse(cachedData));
+    if (!cacheBust) {
+      const cachedData = await redis.get(CACHE_KEY);
+      if (cachedData) {
+        logger.info('Returning Jenkins logs from cache.');
+        return NextResponse.json(JSON.parse(cachedData));
+      }
     }
 
-    // 2. If no cache, fetch fresh data
-    logger.info('Cache miss. Fetching fresh Jenkins logs.');
+    logger.info('Cache miss or refresh requested. Fetching fresh Jenkins logs.');
     const settingsString = await redis.get(SETTINGS_KEY);
     if (!settingsString) {
       throw new Error('Tool settings not found in the database.');
@@ -34,35 +35,42 @@ export async function GET() {
         throw new Error('Jenkins URL or Job Names are not configured in settings.');
     }
 
-    const jobNames = jobNamesStr.split(',').map((name: string) => name.trim()).filter((name: string) => name);
+    const jobNames = jobNamesStr.split(',').map((name: string) => name.trim()).filter(Boolean);
     const authHeader = `Basic ${btoa(`${jenkinsConfig.JENKINS_USER}:${jenkinsConfig.JENKINS_API_TOKEN}`)}`;
 
-    const allBuildsPromises = jobNames.map(async (jobName: string) => {
-      const encodedJobName = encodeURIComponent(jobName);
-      const jenkinsUrl = `${jenkinsConfig.JENKINS_BASE_URL}/job/${encodedJobName}/api/json?tree=builds[number,url]`;
-      
-      const res = await fetch(jenkinsUrl, { headers: { 'Authorization': authHeader } });
-      if (!res.ok) {
-        logger.warn(`Failed to fetch builds for job: ${jobName}`);
-        return [];
+    // --- This is the new, more robust fetching logic ---
+    const allLogPromises = jobNames.map(async (jobName: string) => {
+      try {
+        const encodedJobName = encodeURIComponent(jobName);
+        const jenkinsUrl = `${jenkinsConfig.JENKINS_BASE_URL}/job/${encodedJobName}/api/json?tree=builds[number,url]`;
+        
+        const res = await fetch(jenkinsUrl, { headers: { 'Authorization': authHeader } });
+        if (!res.ok) {
+          throw new Error(`Failed to fetch builds for job: ${jobName} (Status: ${res.status})`);
+        }
+        const data = await res.json();
+        const recentBuilds = (data.builds || []).slice(0, 10); // Get the 10 most recent builds for THIS job
+
+        // Fetch the console log for each of this job's recent builds
+        const logPromisesForJob = recentBuilds.map(async (build: any) => {
+            const logRes = await fetch(`${build.url}consoleText`, { headers: { 'Authorization': authHeader } });
+            const logText = await logRes.text();
+            return { build: build.number, log: logText, jobName: jobName };
+        });
+
+        return Promise.all(logPromisesForJob);
+      } catch (error) {
+        logger.warn({ err: error, jobName }, `Could not fetch logs for job.`);
+        return []; // Return an empty array on failure for this specific job
       }
-      const data = await res.json();
-      return data.builds || [];
     });
 
-    const allBuildsNested = await Promise.all(allBuildsPromises);
-    const allBuilds = allBuildsNested.flat();
+    const logsFromAllJobsNested = await Promise.all(allLogPromises);
+    const logs = logsFromAllJobsNested.flat(); // Combine the logs from all jobs into a single list
+    // ----------------------------------------------------
 
-    const logPromises = allBuilds.slice(0, 15).map(async (build: any) => {
-      const logRes = await fetch(`${build.url}consoleText`, { headers: { 'Authorization': authHeader } });
-      const logText = await logRes.text();
-      return { build: build.number, log: logText };
-    });
-
-    const logs = await Promise.all(logPromises);
     const responsePayload = { logs };
 
-    // 3. Save the fresh data to the cache with a 5-minute expiration
     await redis.set(CACHE_KEY, JSON.stringify(responsePayload), { EX: CACHE_EXPIRATION_SECONDS });
     logger.info('Saved fresh Jenkins logs to cache.');
 

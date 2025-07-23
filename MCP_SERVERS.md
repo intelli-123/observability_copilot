@@ -1,0 +1,1 @@
+1. [AWS-Cloudwatch-mcp server](https://github.com/hyorimitsu/mcp-amazon-cloudwatch-logs)

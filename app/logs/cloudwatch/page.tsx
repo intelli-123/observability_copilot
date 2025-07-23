@@ -1,7 +1,7 @@
 // file: app/logs/cloudwatch/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import GeminiChatWidget from '@/components/GeminiChatWidget';
 import LogPageTemplate from '@/components/LogPageTemplate';
 
@@ -15,29 +15,47 @@ export default function AwsLogsPage() {
   const [logGroups, setLogGroups] = useState<LogGroupData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchAwsLogs = useCallback(async () => {
+    const cacheBuster = isRefreshing ? `?cacheBust=${new Date().getTime()}` : '';
+    //const cacheBuster = `?cacheBust=${new Date().getTime()}`;
+    try {
+      // 👇 This fetch call now explicitly tells the browser not to cache the request.
+      // This is the critical part of the fix.
+      const response = await fetch(`/api/cloudwatch/log${cacheBuster}`, {
+        cache: 'no-store',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch logs');
+      }
+      setLogGroups(data.logGroups || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
 
   useEffect(() => {
-    document.documentElement.classList.add('dark');
-    
-    async function fetchAwsLogs() {
-      try {
-        const response = await fetch('/api/cloudwatch/log');
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch logs');
-        }
-        setLogGroups(data.logGroups || []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
+    // This effect runs only once on the initial page load.
     fetchAwsLogs();
-    
-    return () => document.documentElement.classList.remove('dark');
-  }, []);
+  }, []); // An empty dependency array ensures this.
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setLoading(true);
+    setError(null);
+  };
+
+  useEffect(() => {
+    // This effect runs only when a manual refresh is triggered.
+    if (isRefreshing) {
+      fetchAwsLogs();
+    }
+  }, [isRefreshing, fetchAwsLogs]);
 
   const combinedLogsForGemini = logGroups
     .map(lg => `--- Logs for ${lg.logGroupName} (Region: ${lg.region}) ---\n${lg.logs}`)
@@ -48,6 +66,9 @@ export default function AwsLogsPage() {
       title="AWS CloudWatch Logs"
       iconSrc="/logos/cloudwatch.png"
       iconAlt="AWS CloudWatch Logo"
+      description="Review recent logs from your configured AWS log groups."
+      onRefresh={handleRefresh}
+      isRefreshing={isRefreshing}
     >
       <div className="space-y-6">
         {loading && <p className="text-center py-10 text-gray-400">Loading AWS logs…</p>}
@@ -59,7 +80,6 @@ export default function AwsLogsPage() {
               <span className="text-gray-400 text-sm block">Region: {group.region}</span>
               Log Group: {group.logGroupName}
             </header>
-            
             <div className="p-3">
               <pre className="text-xs whitespace-pre-wrap overflow-x-auto max-h-[60vh] bg-gray-950 p-3 rounded-md text-gray-300">
                 {group.logs}
@@ -67,12 +87,11 @@ export default function AwsLogsPage() {
             </div>
           </section>
         ))}
-
+        
         {!loading && !error && logGroups.length === 0 && (
-            <p className="text-center py-10 text-gray-400">No logs found for the configured groups.</p>
+          <p className="text-center py-10 text-gray-400">No logs found for the configured groups.</p>
         )}
       </div>
-
       <GeminiChatWidget logs={combinedLogsForGemini} />
     </LogPageTemplate>
   );

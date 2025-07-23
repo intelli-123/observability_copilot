@@ -1,4 +1,4 @@
-// file: app/api/mcp-cloudwatch/query/route.ts
+// // file: app/api/mcp-cloudwatch/query/route.ts
 
 import { NextResponse } from 'next/server';
 import { createClient } from 'redis';
@@ -36,100 +36,69 @@ export async function POST(request: Request) {
       throw new Error('AWS credentials are not fully configured in settings.');
     }
 
-    // 2. Initialize the AI and MCP client
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set.");
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const regions = awsConfig.AWS_REGIONS.split(',').map(r => r.trim());
+    const results: string[] = [];
 
-    // 👇 This section is updated to use the Node.js MCP server
-    const serverParams = new StdioClientTransport({
-      command: 'amazon-cloudwatch-logs-mcp-server', // Use npx to run the Node.js package
-      //args: ['C:\\Users\\KiranKumar\\Downloads\\observability_cig\\mcp-amazon-cloudwatch-logs\\src\\index.ts'], // The package name from the URL
-      env: {
-        ...process.env, // Pass through existing env vars
-        AWS_ACCESS_KEY_ID: awsConfig.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: awsConfig.AWS_SECRET_ACCESS_KEY,
-        AWS_REGION: awsConfig.AWS_REGION,
-      }
-    });
+    for (const region of regions) {
+      const serverParams = new StdioClientTransport({
+        command: 'amazon-cloudwatch-logs-mcp-server', 
+        env: {
+          ...process.env,
+          AWS_ACCESS_KEY_ID: awsConfig.AWS_ACCESS_KEY_ID,
+          AWS_SECRET_ACCESS_KEY: awsConfig.AWS_SECRET_ACCESS_KEY,
+          AWS_REGION: region,
+        }
+      });
 
-    const client = new Client({ name: 'cloudwatch-client', version: '1.0.0' });
-    await client.connect(serverParams);
+      const client = new Client({ name: 'cloudwatch-client', version: '1.0.0' });
+      await client.connect(serverParams);
 
-    // 3. Create a tool from the MCP client and initialize the Gemini model
-    const tool = mcpToTool(client);
-  
-    // const fullPrompt = `
-    // SYSTEM INSTRUCTIONS:
-    // You are an expert at querying AWS CloudWatch Logs.
+      const tool = mcpToTool(client);
 
-    // Your task is to take a user's natural language query and convert it into a valid tool call for the CloudWatch Logs tool. The tool provides a function named 'get_log_events', which requires two parameters:
+      const fullPrompt = `
+      You are an expert AWS CloudWatch assistant.
+      The following query is intended for the AWS region: ${region}.
 
-    // - startTime: in milliseconds since the epoch (Unix time)
-    // - endTime: in milliseconds since the epoch
+      When listing log groups, always return a flat human-readable list of **only the logGroupName values**. Do NOT include full JSON objects or metadata fields like arn, storedBytes, or creationTime.
 
-    // If the user's query includes a relative time frame (e.g., "past 5 days", "last 24 hours", "yesterday"), you MUST compute the appropriate startTime and endTime values yourself based on the current time.
+      If the user asks to list log groups, your response MUST look like:
+      - /aws/lambda/myFunction
+      - /aws/lambda/anotherFunction
 
-    // ⚠️ Do NOT ask the user to provide startTime or endTime if a relative time frame is already given.
+      Do not return JSON, only the names of the log groups in plain text format.
 
-    // USER QUESTION:
-    // ${query}
-    // `;
+      USER QUESTION:
+      ${query}
+      `.trim();
 
-  
+      logger.info({ query, fullPrompt, region }, "Sending query to CloudWatch agent for region...");
 
-    // // 4. Run the query through the AI model with the CloudWatch tool
-    // logger.info({ query }, "Sending query to CloudWatch agent...");
-    // const response = await ai.models.generateContent({
-    //   model: 'gemini-2.0-flash',
-    //   //contents: [{ role: 'user', parts: [{ text: query }] }],
-    //   contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-    //   config: {
-    //     tools: [tool],
-    //     // @ts-expect-error: functionCallingConfig is valid at runtime
-    //     functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
-    //   }
-    // });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        config: {
+          tools: [tool],
+          // @ts-expect-error
+          functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
+        }
+      });
 
-    const fullPrompt = `
-    SYSTEM INSTRUCTIONS:
-    You are an expert at querying AWS CloudWatch Logs.
+      await client.close();
 
-    Your task is to take a user's natural language query and convert it into a valid tool call for the CloudWatch Logs tool. The tool provides a function named 'get_log_events', which requires two parameters:
+      const resultText = response.text;
+      results.push(`**Region: ${region}**\n${resultText}`);
+    }
 
-    - startTime: in milliseconds since the epoch (Unix time)
-    - endTime: in milliseconds since the epoch
-
-    If the user's query includes a relative time frame (e.g., "past 5 days", "last 24 hours", "yesterday"), you MUST compute the appropriate startTime and endTime values yourself based on the current time.
-
-    ⚠️ Do NOT ask the user to provide startTime or endTime if a relative time frame is already given.
-
-    USER QUESTION:
-    ${query}
-    `.trim();
-
-    logger.info({ query, fullPrompt }, "Sending query to CloudWatch agent...");
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      config: {
-        tools: [tool],
-        // @ts-expect-error: functionCallingConfig is valid at runtime
-        functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
-      }
-    });
-
-
-    await client.close();
-    const resultText = response.text;
-    logger.info("Successfully received result from CloudWatch agent.");
-
-    return NextResponse.json({ result: resultText });
+    logger.info("Successfully received results from all regions.");
+    return NextResponse.json({ result: results.join('\n\n') });
 
   } catch (error: any) {
     logger.error({ err: error }, 'Error in MCP CloudWatch query route.');
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
