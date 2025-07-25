@@ -83,7 +83,7 @@ Example for Azure:
 
 import { NextResponse } from 'next/server';
 import { createClient } from 'redis';
-import { GoogleGenerativeAI, FunctionCallingConfigMode, mcpToTool } from '@google/genai';
+import { GoogleGenAI, FunctionCallingConfigMode, mcpToTool } from '@google/genai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import logger from '@/utils/logger';
@@ -121,7 +121,8 @@ export async function POST(request: Request) {
     const serverParams = new StdioClientTransport({
       command: 'npx',
       // IMPORTANT: Replace this with the actual package name for the Azure MCP server
-      args: ['-y', '@example/mcp-server-azure'], 
+      args: ['-y',
+        '@azure/mcp@latest server start --read-only'], 
       env: {
         AZURE_TENANT_ID: azureConfig.AZURE_TENANT_ID,
         AZURE_CLIENT_ID: azureConfig.AZURE_CLIENT_ID,
@@ -130,26 +131,31 @@ export async function POST(request: Request) {
       },
     });
 
-    const client = new Client({ name: 'observability-copilot-client', version: '1.0.0' });
+    const client = new Client({ name: 'azure-copilot-client', version: '1.0.0' });
     await client.connect(serverParams);
 
     // 3. Create a tool from the MCP client and initialize the Gemini model
     const tool = mcpToTool(client);
-    const ai = new GoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY! });
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set.");
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
     // 4. Run the query through the AI model with the Azure tool
     logger.info({ query }, "Sending query to Azure agent...");
-    const response = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: query }] }],
-      tools: [tool],
-      toolConfig: {
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: query }] }],
+        config: {
+          tools: [tool],
+          // @ts-expect-error
           functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
-      }
-    });
+        }
+      });
 
     await client.close();
-    const resultText = response.response.text();
+    const resultText = response.text;
     logger.info("Successfully received result from Azure agent.");
 
     return NextResponse.json({ result: resultText });

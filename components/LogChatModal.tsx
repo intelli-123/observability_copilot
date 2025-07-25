@@ -24,16 +24,27 @@ type Message = {
   content: string;
 };
 
+// --- Dynamic Example Queries ---
+const exampleQueries: Record<string, string> = {
+  'jenkins': 'e.g., "Which builds failed in the last 24 hours?"',
+  'gcp': 'e.g., "Show me all critical errors from the past hour."',
+  'cloudwatch': 'e.g., "List all log groups in the us-east-1 region."',
+  'mcp-salesforce': 'e.g., "Find all open opportunities for the Acme Corp account."',
+  'mcp-cloudwatch': 'e.g., "Summarize the errors from the last hour."',
+  'mcp-azure': 'e.g., "List all storage accounts."',
+  'gitlab': 'e.g., "Show me the latest commits to the main branch."',
+  'default': 'e.g., "Summarize the recent activity."',
+};
+// -----------------------------
+
 export default function LogChatModal({ vendor, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // The API path is now dynamically built from the vendor's key
   const apiPath = `/api/${vendor.key}/query`;
 
-  // Auto-scroll to the bottom when new messages are added
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -73,6 +84,9 @@ export default function LogChatModal({ vendor, onClose }: Props) {
     }
   };
 
+  // Get the specific example query for the current vendor
+  const exampleQuery = exampleQueries[vendor.key] || exampleQueries['default'];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in-0">
       <div className="relative w-full max-w-4xl h-[90vh] bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col">
@@ -92,7 +106,8 @@ export default function LogChatModal({ vendor, onClose }: Props) {
           {messages.length === 0 && !isLoading && (
             <div className="text-center text-gray-400 h-full flex flex-col justify-center items-center">
                 <p>Ask a question to get started.</p>
-                <p className="text-sm mt-2">e.g., "Find all open opportunities for the Acme Corp account, List all Log Groups"</p>
+                {/* This now displays the dynamic example query */}
+                <p className="text-sm mt-2">{exampleQuery}</p>
             </div>
           )}
           {messages.map((msg, i) => (

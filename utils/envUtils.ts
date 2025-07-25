@@ -47,5 +47,13 @@ export const getVendorList = () => {
       badge: 'MCP-Client',
       type: 'mcp',
     },
+    {
+      key: 'mcp-azure',
+      name: 'MCP for Azure',
+      logo: '/logos/azure.png',
+      link: '/logs/mcp-azure',
+      badge: 'MCP-Client',
+      type: 'mcp',
+    },
   ] as const;
 };

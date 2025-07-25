@@ -103,5 +103,18 @@ export const TOOL_CONFIGS: ToolConfig[] = [
       { key: 'AWS_REGIONS', label: 'AWS Regions', placeholder: 'e.g., us-east-1' },
     ],
   },
+  {
+    key: 'mcp-azure',
+    name: 'MCP for Azure',
+    description: 'Provide Azure credentials to enable the MCP server.',
+    logo: '/logos/azure.png', // Ensure azure.png is in /public/logos
+    fields: [
+      { key: 'AZURE_TENANT_ID', label: 'Azure Tenant ID', placeholder: 'Enter your Tenant ID' },
+      { key: 'AZURE_CLIENT_ID', label: 'Azure Client ID', placeholder: 'Enter your Client ID' },
+      { key: 'AZURE_CLIENT_SECRET', label: 'Azure Client Secret', placeholder: 'Enter your Client Secret', type: 'password' },
+      { key: 'AZURE_SUBSCRIPTION_ID', label: 'Azure Subscription ID', placeholder: 'Enter your Subscription ID' },
+    ],
+  },
 ];
+
 
