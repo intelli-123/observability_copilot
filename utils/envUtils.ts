@@ -55,5 +55,13 @@ export const getVendorList = () => {
       badge: 'MCP-Client',
       type: 'mcp',
     },
+    {
+      key: 'mcp-kubernetes',
+      name: 'MCP for Kubernetes',
+      logo: '/logos/kubernetes.png',
+      link: '/logs/mcp-kubernetes',
+      badge: 'MCP-Client',
+      type: 'mcp',
+    },
   ] as const;
 };

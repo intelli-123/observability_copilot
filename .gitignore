@@ -28,7 +28,7 @@
 # IMPORTANT: Never commit service account keys or other secrets
 *-lock.json
 *.pem
-
+.kube*
 # Log files
 npm-debug.log*
 yarn-debug.log*

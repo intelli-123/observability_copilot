@@ -115,6 +115,20 @@ export const TOOL_CONFIGS: ToolConfig[] = [
       { key: 'AZURE_SUBSCRIPTION_ID', label: 'Azure Subscription ID', placeholder: 'Enter your Subscription ID' },
     ],
   },
+  {
+    key: 'mcp-kubernetes',
+    name: 'MCP for Kubernetes',
+    description: 'Provide Kubernetes credentials to enable the MCP server.',
+    logo: '/logos/kubernetes.png', // Ensure kubernetes.png is in /public/logos
+    fields: [
+      { 
+        key: 'KUBECONFIG', 
+        label: 'Kubeconfig File Path', 
+        placeholder: 'No setting is required nned to place the kube/config in PWD',
+        type: 'text',
+      },
+    ],
+  },
 ];
 
 
