@@ -35,11 +35,16 @@ export async function POST(request: Request) {
     if (!azureConfig?.AZURE_CLIENT_ID) {
       throw new Error('Azure credentials are not fully configured in settings.');
     }
-    // , '--read-only'
-    // 2. Configure the MCPClient to launch the server with the correct credentials
+
     const serverParams = new StdioClientTransport({
       command: 'npx',
-      args: ['-y', '@azure/mcp@latest', 'server', 'start', '--read-only'], 
+      args: [
+        '--yes',
+        '@azure/mcp@latest',
+        'server',
+        'start',
+        '--read-only'
+      ],
       env: {
         AZURE_TENANT_ID: azureConfig.AZURE_TENANT_ID,
         AZURE_CLIENT_ID: azureConfig.AZURE_CLIENT_ID,

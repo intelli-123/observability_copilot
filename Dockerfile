@@ -9,6 +9,8 @@ COPY package*.json ./
 RUN echo "📦 Installing dependencies..." && npm install
 
 RUN npm install -g @hyorimitsu/amazon-cloudwatch-logs-mcp-server
+RUN npm install @azure/mcp
+
 
 # Copy rest of the application code
 COPY . .
@@ -29,6 +31,8 @@ WORKDIR /app
 
 # Install MCP server globally again
 RUN npm install -g @hyorimitsu/amazon-cloudwatch-logs-mcp-server
+RUN npm install @azure/mcp
+
 
 # Copy necessary files from build stage
 COPY --from=base /app/.next ./.next

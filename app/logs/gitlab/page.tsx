@@ -47,6 +47,7 @@ export default function GitLabLogsPage() {
       title="GitLab Audit Logs"
       iconSrc="/logos/gitlab.png"
       iconAlt="GitLab Logo"
+      description="This page displays GitLab audit logs fetched from the API."
     >
       <div className="space-y-6">
         {loading && <p className="text-center py-10 text-gray-400">Loading GitLab logs…</p>}
